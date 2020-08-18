@@ -12,7 +12,8 @@
   },
   "autoInjectContext": null,
   "omitWebhookSideEffects": {{.Values.omitWebhookSideEffects}},
-  "clusterDomain": "{{.Values.global.clusterDomain}}"
+  "clusterDomain": "{{.Values.global.clusterDomain}}",
+  "enableEndpointSlices": "{{.Values.global.enableEndpointSlices}}"
 }
 {{- end -}}
 
@@ -30,10 +31,10 @@
     "port": {{.Values.global.proxy.ports.control}}
   },
   "ignoreInboundPorts":[
-    {{- include "partials.splitStringListToPorts" .Values.global.proxyInit.ignoreInboundPorts -}}
+    {{- include "partials.splitStringListToPortRanges" .Values.global.proxyInit.ignoreInboundPorts -}}
   ],
   "ignoreOutboundPorts":[
-    {{- include "partials.splitStringListToPorts" .Values.global.proxyInit.ignoreOutboundPorts -}}
+    {{- include "partials.splitStringListToPortRanges" .Values.global.proxyInit.ignoreOutboundPorts -}}
   ],
   "inboundPort":{
     "port": {{.Values.global.proxy.ports.inbound}}
@@ -63,13 +64,19 @@
     "pullPolicy":"{{.Values.debugContainer.image.pullPolicy}}"
   },
   "debugImageVersion": "{{.Values.debugContainer.image.version}}",
-  "destinationGetNetworks": "{{.Values.global.proxy.destinationGetNetworks}}"
+  "destinationGetNetworks": "{{.Values.global.proxy.destinationGetNetworks}}",
+  "outboundConnectTimeout": "{{.Values.global.proxy.outboundConnectTimeout}}",
+  "inboundConnectTimeout": "{{.Values.global.proxy.inboundConnectTimeout}}"
 }
 {{- end -}}
 
 {{- define "linkerd.configs.install" -}}
 {
   "cliVersion":"{{ .Values.global.linkerdVersion }}",
-  "flags":[]
+  "flags":[
+  {{- if .Values.disableHeartBeat -}}
+  {"name": "disable-heartbeat", "value": "true"}
+  {{- end -}}
+  ]
 }
 {{- end -}}

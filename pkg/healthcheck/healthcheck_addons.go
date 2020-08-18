@@ -18,13 +18,19 @@ const (
 	// LinkerdGrafanaAddOnChecks adds checks related to grafana add-on components
 	LinkerdGrafanaAddOnChecks CategoryID = "linkerd-grafana"
 
+	// LinkerdPrometheusAddOnChecks adds checks related to Prometheus add-on components
+	LinkerdPrometheusAddOnChecks CategoryID = "linkerd-prometheus"
+
 	// LinkerdTracingAddOnChecks adds checks related to tracing add-on components
 	LinkerdTracingAddOnChecks CategoryID = "linkerd-tracing"
 )
 
 var (
+	// errorKeyNotFound is returned when a key is not found in data
+	errorKeyNotFound error = errors.New("key not found")
+
 	// AddOnCategories is the list of add-on category checks
-	AddOnCategories = []CategoryID{LinkerdAddOnChecks, LinkerdGrafanaAddOnChecks, LinkerdTracingAddOnChecks}
+	AddOnCategories = []CategoryID{LinkerdAddOnChecks, LinkerdPrometheusAddOnChecks, LinkerdGrafanaAddOnChecks, LinkerdTracingAddOnChecks}
 )
 
 // addOnCategories contain all the checks w.r.t add-ons. It is strongly advised to
@@ -45,6 +51,51 @@ func (hc *HealthChecker) addOnCategories() []category {
 			},
 		},
 		{
+			id: LinkerdPrometheusAddOnChecks,
+			checkers: []checker{
+				{
+					description: "prometheus add-on service account exists",
+					warning:     true,
+					check: func(context.Context) error {
+						if _, ok := hc.addOns[l5dcharts.PrometheusAddOn]; ok {
+							return hc.checkServiceAccounts([]string{"linkerd-prometheus"}, hc.ControlPlaneNamespace, "")
+						}
+						return &SkipError{Reason: "prometheus add-on not enabled"}
+					},
+				},
+				{
+					description: "prometheus add-on config map exists",
+					warning:     true,
+					check: func(context.Context) error {
+						if _, ok := hc.addOns[l5dcharts.PrometheusAddOn]; ok {
+							_, err := hc.kubeAPI.CoreV1().ConfigMaps(hc.ControlPlaneNamespace).Get("linkerd-prometheus-config", metav1.GetOptions{})
+							return err
+						}
+						return &SkipError{Reason: "prometheus add-on not enabled"}
+					},
+				},
+				{
+					description:         "prometheus pod is running",
+					warning:             true,
+					retryDeadline:       hc.RetryDeadline,
+					surfaceErrorOnRetry: true,
+					check: func(context.Context) error {
+						if _, ok := hc.addOns[l5dcharts.PrometheusAddOn]; ok {
+							// populate controlPlanePods to get the latest status, during retries
+							var err error
+							hc.controlPlanePods, err = hc.kubeAPI.GetPodsByNamespace(hc.ControlPlaneNamespace)
+							if err != nil {
+								return err
+							}
+
+							return checkContainerRunning(hc.controlPlanePods, "prometheus")
+						}
+						return &SkipError{Reason: "prometheus add-on not enabled"}
+					},
+				},
+			},
+		},
+		{
 			id: LinkerdGrafanaAddOnChecks,
 			checkers: []checker{
 				{
@@ -53,9 +104,15 @@ func (hc *HealthChecker) addOnCategories() []category {
 					check: func(context.Context) error {
 						if grafana, ok := hc.addOns[l5dcharts.GrafanaAddOn]; ok {
 							name, err := getString(grafana, "name")
-							if err != nil {
+							if err != nil && !errors.Is(err, errorKeyNotFound) {
 								return err
 							}
+
+							if errors.Is(err, errorKeyNotFound) {
+								// default name of grafana instance
+								name = "linkerd-grafana"
+							}
+
 							return hc.checkServiceAccounts([]string{name}, hc.ControlPlaneNamespace, "")
 						}
 						return &SkipError{Reason: "grafana add-on not enabled"}
@@ -67,9 +124,15 @@ func (hc *HealthChecker) addOnCategories() []category {
 					check: func(context.Context) error {
 						if grafana, ok := hc.addOns[l5dcharts.GrafanaAddOn]; ok {
 							name, err := getString(grafana, "name")
-							if err != nil {
+							if err != nil && !errors.Is(err, errorKeyNotFound) {
 								return err
 							}
+
+							if errors.Is(err, errorKeyNotFound) {
+								// default name of grafana instance
+								name = "linkerd-grafana"
+							}
+
 							_, err = hc.kubeAPI.CoreV1().ConfigMaps(hc.ControlPlaneNamespace).Get(fmt.Sprintf("%s-config", name), metav1.GetOptions{})
 							if err != nil {
 								return err
@@ -268,7 +331,7 @@ func getString(i interface{}, k string) (string, error) {
 
 	v, ok := m[k]
 	if !ok {
-		return "", fmt.Errorf("key '%s' not found in config value", k)
+		return "", errorKeyNotFound
 	}
 
 	res, ok := v.(string)

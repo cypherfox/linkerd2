@@ -503,7 +503,7 @@ status:
 
 }
 
-func TestChecCapability(t *testing.T) {
+func TestCheckCapability(t *testing.T) {
 	tests := []struct {
 		k8sConfigs []string
 		err        error
@@ -570,7 +570,7 @@ metadata:
 			},
 			[]string{
 				"linkerd-config control plane Namespace exists",
-				"linkerd-config control plane ClusterRoles exist: missing ClusterRoles: linkerd-test-ns-controller, linkerd-test-ns-identity, linkerd-test-ns-prometheus, linkerd-test-ns-proxy-injector, linkerd-test-ns-sp-validator, linkerd-test-ns-tap",
+				"linkerd-config control plane ClusterRoles exist: missing ClusterRoles: linkerd-test-ns-controller, linkerd-test-ns-identity, linkerd-test-ns-proxy-injector, linkerd-test-ns-sp-validator, linkerd-test-ns-tap",
 			},
 		},
 		{
@@ -632,7 +632,7 @@ metadata:
 			[]string{
 				"linkerd-config control plane Namespace exists",
 				"linkerd-config control plane ClusterRoles exist",
-				"linkerd-config control plane ClusterRoleBindings exist: missing ClusterRoleBindings: linkerd-test-ns-controller, linkerd-test-ns-identity, linkerd-test-ns-prometheus, linkerd-test-ns-proxy-injector, linkerd-test-ns-sp-validator, linkerd-test-ns-tap",
+				"linkerd-config control plane ClusterRoleBindings exist: missing ClusterRoleBindings: linkerd-test-ns-controller, linkerd-test-ns-identity, linkerd-test-ns-proxy-injector, linkerd-test-ns-sp-validator, linkerd-test-ns-tap",
 			},
 		},
 		{
@@ -1995,8 +1995,8 @@ func TestValidateControlPlanePods(t *testing.T) {
 			pod("linkerd-controller-6f78cbd47-bc557", corev1.PodRunning, true),
 			pod("linkerd-grafana-5b7d796646-hh46d", corev1.PodRunning, true),
 			pod("linkerd-identity-6849948664-27982", corev1.PodRunning, true),
-			pod("linkerd-prometheus-74d6879cd6-bbdk6", corev1.PodFailed, false),
-			pod("linkerd-tap-6c878df6c8-2hmtd", corev1.PodRunning, true),
+			pod("linkerd-prometheus-74d6879cd6-bbdk6", corev1.PodRunning, true),
+			pod("linkerd-tap-6c878df6c8-2hmtd", corev1.PodFailed, false),
 			pod("linkerd-sp-validator-24d2879ce6-cddk9", corev1.PodRunning, true),
 			pod("linkerd-web-98c9ddbcd-7b5lh", corev1.PodRunning, true),
 		}
@@ -2005,7 +2005,7 @@ func TestValidateControlPlanePods(t *testing.T) {
 		if err == nil {
 			t.Fatal("Expected error, got nothing")
 		}
-		if err.Error() != "No running pods for \"linkerd-prometheus\"" {
+		if err.Error() != "No running pods for \"linkerd-tap\"" {
 			t.Fatalf("Unexpected error message: %s", err.Error())
 		}
 	})
@@ -2116,7 +2116,7 @@ func TestValidateDataPlaneNamespace(t *testing.T) {
 				t.Fatalf("Unexpected error: %s", err)
 			}
 
-			// create a synethic category that only includes the "data plane namespace exists" check
+			// create a synthetic category that only includes the "data plane namespace exists" check
 			hc.addCheckAsCategory("data-plane-ns-test-cat", LinkerdDataPlaneChecks, "data plane namespace exists")
 
 			expectedResults := []string{
@@ -2157,6 +2157,17 @@ func TestValidateDataPlanePods(t *testing.T) {
 		}
 		if err.Error() != "The \"voting-65b9fffd77-rlwsd\" pod is not running" {
 			t.Fatalf("Unexpected error message: %s", err.Error())
+		}
+	})
+
+	t.Run("Does not return an error if the pod is Evicted", func(t *testing.T) {
+		pods := []*pb.Pod{
+			{Name: "emoji-d9c7866bb-7v74n", Status: "Evicted", ProxyReady: true},
+		}
+
+		err := validateDataPlanePods(pods, "emojivoto")
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
 		}
 	})
 
@@ -2254,7 +2265,7 @@ func TestLinkerdPreInstallGlobalResourcesChecks(t *testing.T) {
 			"pre-linkerd-global-resources no PodSecurityPolicies exist",
 		}
 		if !reflect.DeepEqual(observer.results, expected) {
-			testutil.AnnotatedErrorf(t, "Mistmatch result", "Mismatch result.\nExpected: %v\n Actual: %v\n", expected, observer.results)
+			testutil.AnnotatedErrorf(t, "Mismatch result", "Mismatch result.\nExpected: %v\n Actual: %v\n", expected, observer.results)
 		}
 	})
 
@@ -2324,17 +2335,8 @@ metadata:
 	})
 }
 
-func getConfigAndKubeSystemNamespace(ha bool, nsLabel string) []string {
+func getWebhookAndKubeSystemNamespace(nsLabel string, failurePolicy string) []string {
 	return []string{fmt.Sprintf(`
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: linkerd-config
-  namespace: linkerd
-data:
-  install: |
-    {"cliVersion":"dev-undefined","flags":[{"name":"ha","value":"%v"}]}`, ha),
-		fmt.Sprintf(`
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -2342,6 +2344,35 @@ metadata:
   labels:
     %s
   name: kube-system`, nsLabel),
+		fmt.Sprintf(`
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: linkerd-proxy-injector-webhook-config
+  labels:
+    linkerd.io/control-plane-component: proxy-injector
+    linkerd.io/control-plane-ns: linkerd
+webhooks:
+- name: linkerd-proxy-injector.linkerd.io
+  namespaceSelector:
+    matchExpressions:
+    - key: config.linkerd.io/admission-webhooks
+      operator: NotIn
+      values:
+      - disabled
+  clientConfig:
+    service:
+      name: linkerd-proxy-injector
+      namespace: linkerd
+      path: "/"
+    caBundle: cHJveHkgaW5qZWN0b3IgQ0EgYnVuZGxl
+  failurePolicy: %s
+  rules:
+  - operations: [ "CREATE" ]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  sideEffects: None`, failurePolicy),
 	}
 }
 
@@ -2352,24 +2383,24 @@ func TestKubeSystemNamespaceInHA(t *testing.T) {
 		expectedOutput  string
 	}{
 		{
-			"passes when HA is not enabled",
-			getConfigAndKubeSystemNamespace(false, ""),
+			"passes when webhook policy is Ignore is not enabled",
+			getWebhookAndKubeSystemNamespace("", "Ignore"),
 			"",
 		},
 		{
-			"passes when HA is enabled and namespace has required metadata",
-			getConfigAndKubeSystemNamespace(true, "config.linkerd.io/admission-webhooks: disabled"),
+			"passes when webhook policy is Fail and namespace has required metadata",
+			getWebhookAndKubeSystemNamespace("config.linkerd.io/admission-webhooks: disabled", "Fail"),
 			"l5d-injection-disabled pod injection disabled on kube-system",
 		},
 		{
-			"fails when HA and admission hooks are enabled",
-			getConfigAndKubeSystemNamespace(true, "config.linkerd.io/admission-webhooks: enabled"),
-			"l5d-injection-disabled pod injection disabled on kube-system: kube-system namespace needs to have the label config.linkerd.io/admission-webhooks: disabled if HA mode is enabled",
+			"fails when webhook policy is Fail and admission hooks are enabled",
+			getWebhookAndKubeSystemNamespace("config.linkerd.io/admission-webhooks: enabled", "Fail"),
+			"l5d-injection-disabled pod injection disabled on kube-system: kube-system namespace needs to have the label config.linkerd.io/admission-webhooks: disabled if injector webhook failure policy is Fail",
 		},
 		{
-			"fails when HA is enabled and metadata is missing",
-			getConfigAndKubeSystemNamespace(true, ""),
-			"l5d-injection-disabled pod injection disabled on kube-system: kube-system namespace needs to have the label config.linkerd.io/admission-webhooks: disabled if HA mode is enabled",
+			"fails when webhook policy is Fail and metadata is missing",
+			getWebhookAndKubeSystemNamespace("", "Fail"),
+			"l5d-injection-disabled pod injection disabled on kube-system: kube-system namespace needs to have the label config.linkerd.io/admission-webhooks: disabled if injector webhook failure policy is Fail",
 		},
 	}
 
@@ -2380,13 +2411,7 @@ func TestKubeSystemNamespaceInHA(t *testing.T) {
 			hc := NewHealthChecker([]CategoryID{}, &Options{})
 			hc.ControlPlaneNamespace = "linkerd"
 
-			var err error
 			hc.kubeAPI, _ = k8s.NewFakeAPI(tc.k8sConfigs...)
-			_, hc.linkerdConfig, err = hc.checkLinkerdConfigConfigMap()
-			if err != nil {
-				t.Fatalf("Unexpected error: %q", err)
-			}
-
 			hc.addCheckAsCategory("l5d-injection-disabled", LinkerdHAChecks, "pod injection disabled on kube-system")
 
 			obs := newObserver()
@@ -2427,7 +2452,7 @@ data:
   global: |
     {"linkerdNamespace":"linkerd","cniEnabled":false,"version":"install-control-plane-version","identityContext":{"trustDomain":"cluster.local","trustAnchorsPem":"fake-trust-anchors-pem","issuanceLifetime":"86400s","clockSkewAllowance":"20s"}}
   proxy: |
-    {"proxyImage":{"imageName":"gcr.io/linkerd-io/proxy","pullPolicy":"IfNotPresent"},"proxyInitImage":{"imageName":"gcr.io/linkerd-io/proxy-init","pullPolicy":"IfNotPresent"},"controlPort":{"port":4190},"ignoreInboundPorts":[],"ignoreOutboundPorts":[],"inboundPort":{"port":4143},"adminPort":{"port":4191},"outboundPort":{"port":4140},"resource":{"requestCpu":"","requestMemory":"","limitCpu":"","limitMemory":""},"proxyUid":"2102","logLevel":{"level":"warn,linkerd=info"},"disableExternalProfiles":true,"proxyVersion":"install-proxy-version","proxy_init_image_version":"v1.3.3","debugImage":{"imageName":"gcr.io/linkerd-io/debug","pullPolicy":"IfNotPresent"},"debugImageVersion":"install-debug-version"}
+    {"proxyImage":{"imageName":"gcr.io/linkerd-io/proxy","pullPolicy":"IfNotPresent"},"proxyInitImage":{"imageName":"gcr.io/linkerd-io/proxy-init","pullPolicy":"IfNotPresent"},"controlPort":{"port":4190},"ignoreInboundPorts":[],"ignoreOutboundPorts":[],"inboundPort":{"port":4143},"adminPort":{"port":4191},"outboundPort":{"port":4140},"resource":{"requestCpu":"","requestMemory":"","limitCpu":"","limitMemory":""},"proxyUid":"2102","logLevel":{"level":"warn,linkerd=info"},"disableExternalProfiles":true,"proxyVersion":"install-proxy-version","proxy_init_image_version":"v1.3.6","debugImage":{"imageName":"gcr.io/linkerd-io/debug","pullPolicy":"IfNotPresent"},"debugImageVersion":"install-debug-version"}
   install: |
     {"cliVersion":"dev-undefined","flags":[]}`,
 			},
@@ -2473,7 +2498,7 @@ data:
 					},
 					DisableExternalProfiles: true,
 					ProxyVersion:            "install-proxy-version",
-					ProxyInitImageVersion:   "v1.3.3",
+					ProxyInitImageVersion:   "v1.3.6",
 					DebugImage: &configPb.Image{
 						ImageName:  "gcr.io/linkerd-io/debug",
 						PullPolicy: "IfNotPresent",
@@ -3281,7 +3306,7 @@ func TestGetString(t *testing.T) {
 			},
 			k:             "key1",
 			expected:      "",
-			expectedError: errors.New("key 'key1' not found in config value"),
+			expectedError: errorKeyNotFound,
 		},
 	}
 

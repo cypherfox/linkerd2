@@ -1,5 +1,131 @@
 # Changes
 
+## edge-20.8.2
+
+This edge release adds an internationalization framework to the dashboard,
+Spanish translations to the dashboard UI, and a `linkerd multicluster uninstall`
+command for graceful removal of the multicluster components.
+
+* Web UI
+  * Added Spanish translations to the dashboard
+  * Added a framework and documentation to simplify creation of new
+    translations
+* Multicluster
+  * Added a multicluster uninstall command
+  * Added a warning from `linkerd check --multicluster` if the multicluster
+    support is not installed
+
+## edge-20.8.1
+
+This edge adds multi-arch support to Linkerd! Our docker images and CLI now
+support the amd64, arm64, and arm architectures.
+
+* Multicluster
+  * Added a multicluster unlink command for removing multicluster links
+  * Improved multicluster checks to be more informative when the remote API is
+    not reachable
+* Proxy
+  * Enabled a multi-threaded runtime to substantially improve latency especially
+    when the proxy is serving requests for many concurrent connections
+* Other
+  * Fixed an issue where the debug sidecar image was missing during upgrades
+    (thanks @javaducky!)
+  * Updated all control plane plane and proxy container images to be multi-arch
+    to support amd64, arm64, and arm (thanks @aliariff!)
+  * Fixed an issue where check was failing when DisableHeartBeat was set to true
+    (thanks @mvaal!)
+
+## edge-20.7.5
+
+This edge brings a new approach to multicluster service mirror controllers and
+the way services in target clusters are selected for mirroring.
+
+The long-awaited Bring-Your-Own-Prometheus case has been finally addressed.
+
+Many other improvements from our great contributors are described below. Also
+note progress is still being made under the covers for future support for Service
+Topologies (by @Matei207) and delivering image builds in multiple platforms (by
+@aliariff).
+
+* Multicluster
+  * Replaced the single `service-mirror` controller, with separate controllers
+    that will be installed per target cluster through `linkerd multicluster
+    link`. More info [here](https://github.com/linkerd/linkerd2/pull/4710).
+  * Changed the mechanism for mirroring services: instead of relying on
+    annotations on the target services, now the source cluster should specify
+    which services from the target cluster should be exported by using a label
+    selector. More info [here](https://github.com/linkerd/linkerd2/pull/4795).
+  * Added new section in the dashboard for exposing multicluster gateway metrics
+    (thanks @tharun208!)
+* Prometheus
+  * Added `global.prometheusUrl` to the Helm config to have linkerd use an
+    external Prometheus instance instead of the one provided by default.
+  * Added ability to declare sidecar containers in the Prometheus Helm config.
+    This allows adding components for cases like exporting logs to services
+    such as Cloudwatch, Stackdriver, Datadog, etc. (thanks @memory!)
+  * Upgraded Prometheus to the latest version (v2.19.3), which should consume
+    substantially less memory, among other benefits.
+* Other
+  * Fixed bug in `linkerd check` that was failing to wait for Prometheus to be
+    available right after having installed linkerd.
+  * Added ability to set `priorityClassName` for CNI DaemonSet pods, and to
+    install CNI in an existing namespace (both options provided through the CLI
+    and as Helm configs) (thanks @alex-berger!)
+  * Added support for overriding the proxy's inbound and outbound TCP connection
+    timeouts (thanks @mmiller1!)
+  * Added library support for dashboard i18n. Strings still need to be tagged
+    and translations to be added. More info
+    [here](https://github.com/linkerd/linkerd2/pull/4803).
+  * In some Helm charts, replaced the non-standard
+    `linkerd.io/helm-release-version` annotation with `checksum/config` for
+    forcing restarting the component during upgrades (thanks @naseemkullah!)
+  * Upgraded the proxy init-container to v1.3.4, which comes with an updated
+    debian-buster distro and will provide cleaner logs listing the iptables
+    rules applied.
+
+## edge-20.7.4
+
+This edge release adds support for the new Kubernetes
+[EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
+resource to the Destination controller. Using the EndpointSlice API is more
+efficient for the Kubernetes control plane than using the Endpoints API. If
+the cluster supports EndpointSlices (a beta feature in Kubernetes 1.17),
+Linkerd can be installed with `--enable-endpoint-slices` flag to use this
+resource rather than the Endpoints API.
+
+* Added fish shell completions to the `linkerd` command (thanks @WLun001!)
+* Enabled the support for EndpointSlices (thanks @Matei207!)
+* Separated Prometheus checks and made them runnable only when the add-on
+  is enabled
+
+## edge-20.7.3
+
+* Add preliminary support for EndpointSlices which will be usable in future
+  releases (thanks @Matei207!)
+* Internal improvements to the CI process for testing Helm installations
+
+## edge-20.7.2
+
+This edge release moves Linkerd's bundled Prometheus into an add-on. This makes
+the Linkerd Prometheus more configurable, gives it a separate upgrade lifecycle
+from the rest of the control plane, and will allow users to disable the bundled
+Prometheus instance. In addition, this release includes fixes for several
+issues, including a regression where the proxy would fail to report OpenCensus
+spans.
+
+* Prometheus is now an optional add-on, enabled by default
+* Custom tolerations can now be specified for control plane resources when
+  installing with Helm (thanks @DesmondH0!)
+* Evicted data plane pods are no longer considered to be failed by `linkerd
+  check --proxy`, fixing an issue where the check would be retried indefinitely
+  as long as evicted pods are present
+* Fixed a regression where proxy spans were not reported to OpenCensus
+* Fixed a bug where the proxy injector would fail to render skipped port lists
+  when installed with Helm
+* Internal improvements to the proxy for lower latencies under high concurrency
+* Thanks to @Hellcatlk and @surajssd for adding new unit tests and spelling
+  fixes!
+
 ## edge-20.7.1
 
 This edge release features the option to persist prometheus data to a volume
@@ -165,11 +291,11 @@ improvements and fixes for multicluster support.
   * Fixed shellcheck errors in all `bin/` scripts (thanks @joakimr-axis!)
 * Helm
   * Added support for `linkerd mc allow`
-  * Added ability to disable secret rescources for self-signed certs (thanks
+  * Added ability to disable secret resources for self-signed certs (thanks
     @cypherfox!)
 * Proxy
   * Modified the `linkerd-gateway` component to use the inbound proxy, rather
-    than nginx, for gateway; this allows Linkerd to detect loops and propogate
+    than nginx, for gateway; this allows Linkerd to detect loops and propagate
     identity
 
 ## edge-20.5.5
@@ -257,7 +383,7 @@ multicluster. For a tutorial on how to do that, check out the
   * Added multicluster checks to the `linkerd check` command
   * Hid development flags in the `linkerd install` command for release builds
 * Controller
-  * Added ability to configure Prometheus Altermanager as well as recording
+  * Added ability to configure Prometheus Alertmanager as well as recording
     and alerting rules on the Linkerd Prometheus (thanks @naseemkullah!)
   * Added ability to add more commandline flags to the Prometheus command
     (thanks @naseemkullah!)
@@ -608,7 +734,7 @@ instructions](https://linkerd.io/2/tasks/upgrade/#upgrade-notice-stable-270).
     don't fail when the external version endpoint is unreachable (thanks
     @mayankshah1607!)
   * Added a new `tap` APIService check to aid with uncovering Kubernetes API
-    aggregatation layer issues (thanks @droidnoob!)
+    aggregation layer issues (thanks @droidnoob!)
   * Introduced CNI checks to confirm the CNI plugin is installed and ready;
     this is done through `linkerd check --pre --linkerd-cni-enabled` before
     installation and `linkerd check` after installation if the CNI plugin is
@@ -680,7 +806,7 @@ instructions](https://linkerd.io/2/tasks/upgrade/#upgrade-notice-stable-270).
   * Fixed an issue in the `identity` RBAC resource which caused start up
     errors in k8s 1.6 (thanks @Pothulapati!)
   * Added support for using trust anchors from an external certificate issuer
-    (such as `cert-mananger`) to the `linkerd-identity` service
+    (such as `cert-manager`) to the `linkerd-identity` service
   * Added support for headless services (thanks @JohannesEH!)
 * Helm
   * **Breaking change**: Renamed `noInitContainer` parameter to `cniEnabled`
@@ -774,7 +900,7 @@ debugging experience.
     don't fail when the external version endpoint is unreachable (thanks
     @mayankshah1607!)
   * Added a new `tap` APIService check to aid with uncovering Kubernetes API
-    aggregatation layer issues (thanks @droidnoob!)
+    aggregation layer issues (thanks @droidnoob!)
 
 ## edge-20.1.3
 
@@ -1001,7 +1127,7 @@ the Linkerd CLI.
     IPs that match multiple running pods
 * Controller
   * Added support for using trust anchors from an external certificate issuer
-    (such as `cert-mananger`) to the `linkerd-identity` service
+    (such as `cert-manager`) to the `linkerd-identity` service
 * Web UI
   * Added `Host:` header validation to the `linkerd-web` service, to protect
     against DNS rebinding attacks
@@ -3244,7 +3370,7 @@ this release!
 * Control plane
   * Injected proxy containers now have readiness and liveness probes enabled
 
-Special thanks to @sourishkrout for contributing a web readibility fix!
+Special thanks to @sourishkrout for contributing a web readability fix!
 
 ## v18.8.2
 

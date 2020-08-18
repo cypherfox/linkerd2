@@ -116,6 +116,14 @@ type TapRequestParams struct {
 	LabelSelector string
 }
 
+// GatewayRequestParams contains parameters that are used to build a
+// GatewayRequest
+type GatewayRequestParams struct {
+	RemoteClusterName string
+	GatewayNamespace  string
+	TimeWindow        string
+}
+
 // GRPCError generates a gRPC error code, as defined in
 // google.golang.org/grpc/status.
 // If the error is nil or already a gRPC error, return the error.
@@ -594,6 +602,11 @@ func K8sPodToPublicPod(pod corev1.Pod, ownerKind string, ownerName string) *pb.P
 	if pod.DeletionTimestamp != nil {
 		status = "Terminating"
 	}
+
+	if pod.Status.Reason == "Evicted" {
+		status = "Evicted"
+	}
+
 	controllerComponent := pod.Labels[k8s.ControllerComponentLabel]
 	controllerNS := pod.Labels[k8s.ControllerNSLabel]
 

@@ -55,10 +55,9 @@ var (
 
 	// These regexs are not as strict as they could be, but are a quick and dirty
 	// sanity check against illegal characters.
-	alphaNumDash                        = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
-	alphaNumDashDot                     = regexp.MustCompile(`^[\.a-zA-Z0-9-]+$`)
-	alphaNumDashDotSlashColon           = regexp.MustCompile(`^[\./a-zA-Z0-9-:]+$`)
-	alphaNumDashDotSlashColonUnderscore = regexp.MustCompile(`^[\./a-zA-Z0-9-:_]+$`)
+	alphaNumDash              = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
+	alphaNumDashDot           = regexp.MustCompile(`^[\.a-zA-Z0-9-]+$`)
+	alphaNumDashDotSlashColon = regexp.MustCompile(`^[\./a-zA-Z0-9-:]+$`)
 
 	// Full Rust log level syntax at
 	// https://docs.rs/env_logger/0.6.0/env_logger/#enabling-logging
@@ -208,7 +207,8 @@ func getDefaultNamespace() string {
 	ns, _, err := kubeCfg.Namespace()
 
 	if err != nil {
-		log.Errorf("could not set namespace from kubectl context: ensure a valid KUBECONFIG path has been set")
+		log.Warnf(`could not set namespace from kubectl context, using 'default' namespace: %s
+		 ensure the KUBECONFIG path %s is valid`, err, kubeconfigPath)
 		return corev1.NamespaceDefault
 	}
 
@@ -249,6 +249,8 @@ type proxyConfigOptions struct {
 	disableIdentity               bool
 	requireIdentityOnInboundPorts []string
 	disableTap                    bool
+	inboundConnectTimeout         string
+	outboundConnectTimeout        string
 }
 
 func (options *proxyConfigOptions) validate() error {

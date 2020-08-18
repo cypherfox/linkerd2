@@ -77,8 +77,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: _pod_nodeName
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         - name: LINKERD2_PROXY_DESTINATION_CONTEXT
-          value: ns:$(_pod_ns)
+          value: |
+            {"ns":"$(_pod_ns)", "nodeName":"$(_pod_nodeName)"}
         - name: LINKERD2_PROXY_IDENTITY_DISABLED
           value: disabled
         - name: LINKERD2_PROXY_TAP_DISABLED
@@ -146,4 +151,10 @@ spec:
           runAsNonRoot: false
           runAsUser: 0
         terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /run
+          name: linkerd-proxy-init-xtables-lock
+      volumes:
+      - emptyDir: {}
+        name: linkerd-proxy-init-xtables-lock
 ---

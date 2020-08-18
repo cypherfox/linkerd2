@@ -202,6 +202,14 @@ const (
 	// destination lookups on IP addresses from the specified network ranges
 	ProxyDestinationGetNetworks = ProxyConfigAnnotationsPrefix + "/proxy-destination-get-networks"
 
+	// ProxyOutboundConnectTimeout can be used to configure the outbound TCP connection
+	// timeout in the proxy
+	ProxyOutboundConnectTimeout = ProxyConfigAnnotationsPrefix + "/proxy-outbound-connect-timeout"
+
+	// ProxyInboundConnectTimeout can be used to configure the inbound TCP connection
+	// timeout in the proxy
+	ProxyInboundConnectTimeout = ProxyConfigAnnotationsPrefix + "/proxy-inbound-connect-timeout"
+
 	// ProxyEnableGatewayAnnotation can be used to configure the proxy
 	// to operate as a gateway, routing requests that target the inbound router.
 	ProxyEnableGatewayAnnotation = ProxyConfigAnnotationsPrefix + "/enable-gateway"
@@ -260,6 +268,10 @@ const (
 
 	// InitContainerName is the name assigned to the injected init container.
 	InitContainerName = "linkerd-init"
+
+	// InitXtablesLockVolumeMountName is the name of the volumeMount used by proxy-init
+	// to handle iptables-legacy
+	InitXtablesLockVolumeMountName = "linkerd-proxy-init-xtables-lock"
 
 	// ProxyContainerName is the name assigned to the injected proxy container.
 	ProxyContainerName = "linkerd-proxy"
@@ -327,7 +339,7 @@ const (
 	// MountPathBase is the base directory of the mount path.
 	MountPathBase = "/var/run/linkerd"
 
-	// MountPathServiceAccount is the default path where Kuberenetes stores
+	// MountPathServiceAccount is the default path where Kubernetes stores
 	// the service account token
 	MountPathServiceAccount = "/var/run/secrets/kubernetes.io/serviceaccount"
 
@@ -350,6 +362,10 @@ const (
 	// MountPathTLSCrtPEM is the path at which the TLS cert PEM file is mounted.
 	MountPathTLSCrtPEM = MountPathBase + "/tls/tls.crt"
 
+	// MountPathXtablesLock is the path at which the proxy init container mounts xtables
+	// This is necessary for xtables-legacy support
+	MountPathXtablesLock = "/run"
+
 	// IdentityServiceAccountTokenPath is the path to the kubernetes service
 	// account token used by proxies to provision identity.
 	//
@@ -368,21 +384,9 @@ const (
 	// the access information for remote clusters.
 	MirrorSecretType = SvcMirrorPrefix + "/remote-kubeconfig"
 
-	// GatewayNameAnnotation is the annotation that is present on the remote
-	// service, indicating which gateway is supposed to route traffic to it
-	GatewayNameAnnotation = SvcMirrorPrefix + "/gateway-name"
-
-	// RemoteGatewayNameLabel is same as GatewayNameAnnotation but on the local,
-	// mirrored service. It's used for quick querying when we want to figure out
-	// the services that are being associated with a certain gateway
-	RemoteGatewayNameLabel = SvcMirrorPrefix + "/remote-gateway-name"
-
-	// GatewayNsAnnotation is present on the remote service, indicating the ns
-	// in which we can find the gateway
-	GatewayNsAnnotation = SvcMirrorPrefix + "/gateway-ns"
-
-	// RemoteGatewayNsLabel follows the same kind of logic as RemoteGatewayNameLabel
-	RemoteGatewayNsLabel = SvcMirrorPrefix + "/remote-gateway-ns"
+	// DefaultExportedServiceSelector is the default label selector for exported
+	// services.
+	DefaultExportedServiceSelector = SvcMirrorPrefix + "/exported"
 
 	// MirroredResourceLabel indicates that this resource is the result
 	// of a mirroring operation (can be a namespace or a service)
@@ -391,34 +395,9 @@ const (
 	// MirroredGatewayLabel indicates that this is a mirrored gateway
 	MirroredGatewayLabel = SvcMirrorPrefix + "/mirrored-gateway"
 
-	// MirroredGatewayProbePeriod specifies the probe period for the gateway mirror
-	MirroredGatewayProbePeriod = SvcMirrorPrefix + "/mirrored-gateway-probe-period"
-
-	// MirroredGatewayProbePath specifies the probe path for the gateway mirror
-	MirroredGatewayProbePath = SvcMirrorPrefix + "/mirrored-gateway-probe-path"
-
-	// MirroredGatewayRemoteName specifies the name of the remote gateway that has been mirrored
-	MirroredGatewayRemoteName = SvcMirrorPrefix + "/mirrored-gateway-remote-name"
-
-	// MirroredGatewayRemoteNameSpace specifies the namespace of the remote gateway that has been mirrored
-	MirroredGatewayRemoteNameSpace = SvcMirrorPrefix + "/mirrored-gateway-remote-namespace"
-
-	// MulticlusterGatewayAnnotation indicates that this service is a
-	// gateway
-	MulticlusterGatewayAnnotation = SvcMirrorPrefix + "/multicluster-gateway"
-
 	// RemoteClusterNameLabel put on a local mirrored service, it
 	// allows us to associate a mirrored service with a remote cluster
 	RemoteClusterNameLabel = SvcMirrorPrefix + "/cluster-name"
-
-	// RemoteClusterDomainAnnotation is present on the secret
-	// carrying the config of the remote cluster, to allow for
-	// using custom cluster domains
-	RemoteClusterDomainAnnotation = SvcMirrorPrefix + "/remote-cluster-domain"
-
-	// RemoteClusterLinkerdNamespaceAnnotation is present on the secret
-	// carrying the config of the remote cluster
-	RemoteClusterLinkerdNamespaceAnnotation = SvcMirrorPrefix + "/remote-cluster-l5d-ns"
 
 	// RemoteResourceVersionAnnotation is the last observed remote resource
 	// version of a mirrored resource. Useful when doing updates

@@ -19,7 +19,6 @@ about testing from source can be found in the [TEST.md](TEST.md) guide.
   - [Rust](#rust)
 - [Dependencies](#dependencies)
   - [Updating protobuf dependencies](#updating-protobuf-dependencies)
-  - [Updating Docker dependencies](#updating-docker-dependencies)
   - [Updating ServiceProfile generated
     code](#updating-serviceprofile-generated-code)
 - [Helm Chart](#helm-chart)
@@ -341,6 +340,24 @@ cd web/app
 yarn add [dep]
 ```
 
+#### Translations
+
+To add a locale:
+
+```bash
+cd web/app
+yarn lingui add-locale [locales...] # will create a messages.json file for new locale(s)
+```
+
+To extract message keys from existing components:
+
+```bash
+cd web/app
+yarn lingui extract
+...
+yarn lingui compile # done automatically in bin/web run
+```
+
 ### Rust
 
 All Rust development happens in the
@@ -363,22 +380,6 @@ DOCKER_TRACE=1 bin/docker-build-proxy
 
  ```bash
 bin/protoc-go.sh
-```
-
-### Updating Docker dependencies
-
-The Go Docker images rely on base dependency images with hard-coded SHA's:
-
-`gcr.io/linkerd-io/go-deps` depends on
-
-- [`go.mod`](go.mod)
-- [`Dockerfile-go-deps`](Dockerfile-go-deps)
-
-When Go dependencies change, run the following:
-
-```bash
-go mod tidy
-bin/update-go-deps-shas
 ```
 
 ### Updating ServiceProfile generated code
@@ -441,8 +442,6 @@ build_architecture
   digraph G {
     rankdir=LR;
 
-    "Dockerfile-base" [color=lightblue, style=filled, shape=rect];
-    "Dockerfile-go-deps" [color=lightblue, style=filled, shape=rect];
     "Dockerfile-proxy" [color=lightblue, style=filled, shape=rect];
     "controller/Dockerfile" [color=lightblue, style=filled, shape=rect];
     "cli/Dockerfile-bin" [color=lightblue, style=filled, shape=rect];
@@ -452,7 +451,6 @@ build_architecture
     "_docker.sh" -> "_log.sh";
     "_gcp.sh";
     "_log.sh";
-    "_tag.sh" -> "Dockerfile-go-deps";
 
     "build-cli-bin" -> "_tag.sh";
     "build-cli-bin" -> "root-tag";
@@ -464,24 +462,13 @@ build_architecture
     "docker-build" -> "docker-build-proxy";
     "docker-build" -> "docker-build-web";
 
-    "docker-build-base" -> "_docker.sh";
-    "docker-build-base" -> "Dockerfile-base";
-
     "docker-build-cli-bin" -> "_docker.sh";
     "docker-build-cli-bin" -> "_tag.sh";
-    "docker-build-cli-bin" -> "docker-build-base";
-    "docker-build-cli-bin" -> "docker-build-go-deps";
     "docker-build-cli-bin" -> "cli/Dockerfile-bin";
 
     "docker-build-controller" -> "_docker.sh";
     "docker-build-controller" -> "_tag.sh";
-    "docker-build-controller" -> "docker-build-base";
-    "docker-build-controller" -> "docker-build-go-deps";
     "docker-build-controller" -> "controller/Dockerfile";
-
-    "docker-build-go-deps" -> "_docker.sh";
-    "docker-build-go-deps" -> "_tag.sh";
-    "docker-build-go-deps" -> "Dockerfile-go-deps";
 
     "docker-build-grafana" -> "_docker.sh";
     "docker-build-grafana" -> "_tag.sh";
@@ -493,8 +480,6 @@ build_architecture
 
     "docker-build-web" -> "_docker.sh";
     "docker-build-web" -> "_tag.sh";
-    "docker-build-web" -> "docker-build-base";
-    "docker-build-web" -> "docker-build-go-deps";
     "docker-build-web" -> "web/Dockerfile";
 
     "docker-images" -> "_docker.sh";
@@ -502,13 +487,7 @@ build_architecture
 
     "docker-pull" -> "_docker.sh";
 
-    "docker-pull-deps" -> "_docker.sh";
-    "docker-pull-deps" -> "_tag.sh";
-
     "docker-push" -> "_docker.sh";
-
-    "docker-push-deps" -> "_docker.sh";
-    "docker-push-deps" -> "_tag.sh";
 
     "docker-retag-all" -> "_docker.sh";
 
@@ -537,15 +516,8 @@ build_architecture
     "workflow.yml" -> "_tag.sh";
     "workflow.yml" -> "docker-build";
     "workflow.yml" -> "docker-push";
-    "workflow.yml" -> "docker-push-deps";
     "workflow.yml" -> "docker-retag-all";
     "workflow.yml" -> "lint";
-
-    "update-go-deps-shas" -> "_tag.sh";
-    "update-go-deps-shas" -> "cli/Dockerfile-bin";
-    "update-go-deps-shas" -> "controller/Dockerfile";
-    "update-go-deps-shas" -> "grafana/Dockerfile";
-    "update-go-deps-shas" -> "web/Dockerfile";
 
     "web" -> "go-run";
   }
